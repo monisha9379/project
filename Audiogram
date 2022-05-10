@@ -1,0 +1,133 @@
+"""Audiogram."""
+
+import numpy as np
+import csv
+import matplotlib.pyplot as plt
+
+
+def set_audiogram_parameters(dBHL, freqs, conduction, masking, earside,
+                             ax=None, **kwargs):
+    """Set measuring points.
+
+    Parameters
+    ----------
+    dBHL : array_like
+          dB(HearingLevel)
+    freqs : array_like
+          Frequency Vector in Hz
+    ax: plt.Ax, optional
+          Matplotlib Ax to plot on
+    earside: str, default='left'
+          'left' or 'right' ear
+    masking: bool, default=False
+          Masked or unmasked hearing test
+    conduction: str, default='air'
+          Air conduction is 'air' and bone conduction is 'bone'
+    Returns
+    -------
+    plt.Axis
+        Matplotlib axis containing the plot.
+
+    """
+    if ax is None:
+        ax = plt.gca()
+    if freqs is None:
+        freqs = [125,250,500,750,1000,1500,2000,3000,4000,6000,8000]
+    xticks = np.arange(len(freqs))
+    ax.set_xlabel('frequency (Hz)')
+    ax.set_ylabel('Hearing level (dBHL)')
+    ax.set_xlim([-0.5, xticks[-1] + 0.5])
+    ax.set_ylim([-20, 120])
+    plt.setp(ax, xticks=xticks, xticklabels=sorted(freqs))
+    major_ticks = np.arange(-20, 120, 10)
+    minor_ticks = np.arange(-20, 120, 5)
+    ax.set_yticks(major_ticks)
+    ax.set_yticks(minor_ticks, minor=True)
+    ax.grid(which='both')
+    ax.invert_yaxis()
+    ax.tick_params(axis='x', labelsize=5.5)
+    ax.tick_params(axis='y', labelsize=5.5)
+    ax.set_aspect(0.9 / ax.get_data_ratio())
+    ax.axhspan(-20,25,facecolor='white',alpha=0.3)
+    ax.axhspan(25,40,facecolor='yellow',alpha=0.3)
+    ax.axhspan(40,55,facecolor='cyan',alpha=0.3)
+    ax.axhspan(55,70,facecolor='green',alpha=0.3)
+    ax.axhspan(70,90,facecolor='magenta',alpha=0.3)
+    ax.axhspan(90,120,facecolor='red',alpha=0.3)
+    ax.text(6,22,'normal hearing',horizontalalignment='center',style='oblique',fontsize='9')
+    ax.text(6,32,'mild hearing loss',horizontalalignment='center',style='oblique',fontsize='9')
+    ax.text(6,47,'moderate hearing loss',horizontalalignment='center',style='oblique',fontsize='9')
+    ax.text(6,62,'moderately severe hearing loss',horizontalalignment='center',style='oblique',fontsize='9')
+    ax.text(6,80,'severe hearing loss',horizontalalignment='center',style='oblique',fontsize='9')
+    ax.text(6,105,'profound hearing loss',horizontalalignment='center',style='oblique',fontsize='9')
+    ax.set_title('{} ear'.format(earside))
+
+    if earside == 'left':
+        color = 'b'
+        if conduction == 'air' and masking == 'off':
+            marker = 'x'
+        elif conduction == 'air' and masking == 'on':
+                marker = 's'
+        else:
+            raise NameError("Conduction has to be 'air' or 'bone'")
+    elif earside == 'right':
+        color = 'r'
+        if conduction == 'air' and masking == 'off':
+            marker = 'o'
+        elif conduction == 'air' and masking == 'on':
+            marker = '^'
+        else:
+            raise NameError("Conduction has to be 'air' or 'bone'")
+    elif not earside == 'right' or not earside == 'left':
+        raise NameError("'left' or 'right'?")
+    lines = ax.plot(dBHL, color=color, marker=marker, markersize=4,
+                    markeredgewidth=1, fillstyle='none')
+    gridlines = ax.get_xgridlines() + ax.get_ygridlines()
+    for line in gridlines:
+        line.set_linestyle('-')
+    return lines
+
+
+def make_audiogram(filename, results=None):
+
+        if results is None:
+            results = 'audiometer/results'
+        data = _read_audiogram(filename)
+        conduction = [option for cond, option, none in data
+                      if cond == 'Conduction'][0]
+        masking = [option for mask, option, none in data
+                   if mask == 'Masking'][0]
+
+        if 'right' in [side for frequency, level, side in data] and (
+           'left' in [side for frequency, level, side in data]):
+            f, (ax1, ax2) = plt.subplots(ncols=2)
+        else:
+            ax1, ax2 = None, None
+            f = plt.figure()
+
+        if 'right' in [side for frequency, level, side in data]:
+            dBHL, freqs = _extract_parameters(data, 'right')
+            set_audiogram_parameters(dBHL, freqs, conduction, masking,
+                                     earside='right', ax=ax1)
+
+        if 'left' in [side for frequency, level, side in data]:
+            dBHL, freqs = _extract_parameters(data, 'left')
+            set_audiogram_parameters(dBHL, freqs, conduction, masking,
+                                     earside='left', ax=ax2)
+
+        f.savefig('{}{}.pdf'.format(results, filename))
+
+
+def _read_audiogram(filename):
+    with open('audiometer/results/{}'.format(filename), 'r') as csvfile:
+        reader = csv.reader(csvfile)
+        data = [data for data in reader]
+    return data
+
+
+def _extract_parameters(data, earside):
+    parameters = sorted((float(frequency), float(level)) for level, frequency, side
+                        in data if side == earside)
+    dBHL = [level for frequency, level in parameters]
+    freqs = [int(frequency) for frequency, level in parameters]
+    return dBHL, freqs
